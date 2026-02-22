@@ -22,6 +22,11 @@ class DialogAdjustTempo : public EditorDialog {
 
     double myBPM, myStop, myOffset, myBeatsToInsert;
     int myInsertTarget;
+    int mySyncMode;
+    bool myPreserveInputBpms;
+    bool mySyncToFilteredWaveform;
+    int pendingSelectBeginRow_;
+    int pendingSelectEndRow_;
 };
 
 };  // namespace Vortex
