@@ -354,10 +354,10 @@ struct WaveformImpl : public Waveform {
             }
 
             FindOnsets(filteredSamples.begin(), samplerate, numFilteredFrames,
-                       1, result);
+                       std::thread::hardware_concurrency(), result);
         } else {
-            FindOnsets(originalSamples.begin(), samplerate, numFrames, 1,
-                       result);
+            FindOnsets(originalSamples.begin(), samplerate, numFrames,
+                       std::thread::hardware_concurrency(), result);
         }
 
         RefineOnsets(result, originalSamples.begin(), samplerate, numFrames);
