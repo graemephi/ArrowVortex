@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/Input.h>
 #include <Simfile/Tempo.h>
 #include <Simfile/Segments.h>
 
@@ -15,7 +16,7 @@ struct TempoBox {
     uint8_t isSelected : 1;
 };
 
-struct TempoBoxes {
+struct TempoBoxes : public InputHandler {
     static void create(XmrNode& settings);
     static void destroy();
 
@@ -45,6 +46,8 @@ struct TempoBoxes {
     virtual void draw() = 0;
 
     virtual const Vector<TempoBox>& getBoxes() = 0;
+
+    virtual bool isDragging() const = 0;
 };
 
 extern TempoBoxes* gTempoBoxes;
