@@ -16,6 +16,7 @@ DialogWaveformSettings::DialogWaveformSettings() {
     waveShape_ = gWaveform->getWaveShape();
     antiAliasingMode_ = gWaveform->getAntiAliasing();
     isOverlayFilterActive_ = gWaveform->getOverlayFilter();
+    isOverlayOnsetsActive_ = gWaveform->getOverlayOnsets();
 
     filterType_ = Waveform::FT_HIGH_PASS;
     filterStrength_ = 0.75f;
@@ -58,6 +59,15 @@ DialogWaveformSettings::DialogWaveformSettings() {
     filterColor->alpha.bind(&settingsColorScheme_.filter.a);
     filterColor->onChange.bind(this, &DialogWaveformSettings::myUpdateSettings);
     filterColor->setTooltip("Color of the filtered waveform");
+
+    // Onset color
+    WgColorPicker* onsetColor = myLayout.add<WgColorPicker>("Onset color");
+    onsetColor->red.bind(&settingsColorScheme_.onset.r);
+    onsetColor->green.bind(&settingsColorScheme_.onset.g);
+    onsetColor->blue.bind(&settingsColorScheme_.onset.b);
+    onsetColor->alpha.bind(&settingsColorScheme_.onset.a);
+    onsetColor->onChange.bind(this, &DialogWaveformSettings::myUpdateSettings);
+    onsetColor->setTooltip("Color of the onset markers");
 
     // Luminance.
     WgCycleButton* lum = myLayout.add<WgCycleButton>("Luminance");
@@ -114,6 +124,16 @@ DialogWaveformSettings::DialogWaveformSettings() {
         "If enabled, the filtered waveform is shown on top of the original "
         "waveform");
 
+    // Show onsets.
+    myLayout.row().col(228);
+    WgCheckbox* overlayOnsets = myLayout.add<WgCheckbox>();
+    overlayOnsets->text.set("Overlay onsets");
+    overlayOnsets->value.bind(&isOverlayOnsetsActive_);
+    overlayOnsets->onChange.bind(
+        this, &DialogWaveformSettings::myToggleOverlayOnsets);
+    overlayOnsets->setTooltip(
+        "If enabled, detected onsets are shown as horizontal lines");
+
     // Filtering.
     myLayout.row().col(112).col(112);
 
@@ -145,6 +165,10 @@ void DialogWaveformSettings::myUpdateSettings() {
 
 void DialogWaveformSettings::myToggleOverlayFilter() {
     gWaveform->setOverlayFilter(isOverlayFilterActive_);
+}
+
+void DialogWaveformSettings::myToggleOverlayOnsets() {
+    gWaveform->setOverlayOnsets(isOverlayOnsetsActive_);
 }
 
 void DialogWaveformSettings::myEnableFilter() {

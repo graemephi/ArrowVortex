@@ -20,6 +20,7 @@ class DialogWaveformSettings : public EditorDialog {
     void myEnableFilter();
     void myDisableFilter();
     void myToggleOverlayFilter();
+    void myToggleOverlayOnsets();
 
     Waveform::ColorScheme settingsColorScheme_;
     int presetIndex_;
@@ -30,6 +31,7 @@ class DialogWaveformSettings : public EditorDialog {
     int filterType_;
     float filterStrength_;
     bool isOverlayFilterActive_;
+    bool isOverlayOnsetsActive_;
 };
 
 };  // namespace Vortex

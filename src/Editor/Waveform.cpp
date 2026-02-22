@@ -21,6 +21,8 @@
 #include <Editor/Menubar.h>
 #include <Editor/TextOverlay.h>
 #include <Editor/TransientFilter.h>
+#include <Editor/FindOnsets.h>
+#include <Editor/AutoSync.h>
 #include <Iir.h>
 
 namespace Vortex {
@@ -51,7 +53,7 @@ static const int UNUSED_BLOCK = -1;
 
 struct WaveBlock {
     int id;
-    Texture tex[4];
+    Texture tex[6];  // 0-1: original L/R, 2-3: filtered L/R, 4-5: onset L/R
 };
 
 // ================================================================================================
@@ -175,6 +177,14 @@ struct WaveformImpl : public Waveform {
     Luminance waveformLuminance_;
     int waveformAntiAliasingMode_;
     bool waveformOverlayFilter_;
+    bool waveformOverlayOnsets_;
+
+    struct Onsets {
+        Vector<Onset> onsets;
+        int type;
+        double strength;
+    };
+    Vector<Onsets> waveformOnsets_;
 
     // ================================================================================================
     // ViewImpl :: constructor / destructor.
@@ -189,6 +199,7 @@ struct WaveformImpl : public Waveform {
 
         waveformFilter_ = nullptr;
         waveformOverlayFilter_ = true;
+        waveformOverlayOnsets_ = false;
 
         updateBlockW();
         waveformTextureBuffer_.resize(TEX_W * TEX_H);
@@ -238,6 +249,9 @@ struct WaveformImpl : public Waveform {
             waveform->get(
                 "filterColor",
                 reinterpret_cast<float*>(&waveformColorScheme_.filter), 4);
+            waveform->get("onsetColor",
+                          reinterpret_cast<float*>(&waveformColorScheme_.onset),
+                          4);
 
             const char* ll = waveform->get("luminance");
             if (ll) setLuminance(ToLuminance(ll));
@@ -257,6 +271,7 @@ struct WaveformImpl : public Waveform {
         SaveColor(waveform, "bgColor", waveformColorScheme_.bg);
         SaveColor(waveform, "waveColor", waveformColorScheme_.wave);
         SaveColor(waveform, "filterColor", waveformColorScheme_.filter);
+        SaveColor(waveform, "onsetColor", waveformColorScheme_.onset);
 
         waveform->addAttrib("luminance", ToString(waveformLuminance_));
         waveform->addAttrib("waveStyle", ToString(waveformShape_));
@@ -281,6 +296,144 @@ struct WaveformImpl : public Waveform {
 
     bool getOverlayFilter() override { return waveformOverlayFilter_; }
 
+    void setOverlayOnsets(bool enabled) override {
+        waveformOverlayOnsets_ = enabled;
+        if (enabled) clearBlocks();
+    }
+
+    bool getOverlayOnsets() override { return waveformOverlayOnsets_; }
+
+    const Vector<Onset>& getOnsets(bool filtered) override {
+        int type =
+            (filtered && waveformFilter_) ? waveformFilter_->type + 1 : 0;
+        double strength =
+            (filtered && waveformFilter_) ? waveformFilter_->strength : 0.0;
+        int slot = -1;
+        for (int i = 0; i < waveformOnsets_.size(); ++i) {
+            auto& onsets = waveformOnsets_[i];
+            if (onsets.type == type) {
+                if (onsets.strength == strength) {
+                    return onsets.onsets;
+                }
+                slot = i;
+                break;
+            }
+        }
+        if (slot == -1) {
+            slot = waveformOnsets_.size();
+            waveformOnsets_.push_back({{}, type, strength});
+        } else {
+            waveformOnsets_[slot].strength = strength;
+        }
+
+        Vector<Onset>& result = waveformOnsets_[slot].onsets;
+        result.clear();
+
+        auto& music = gMusic->getSamples();
+        if (!music.isCompleted()) {
+            return result;
+        }
+
+        int numFrames = music.getNumFrames();
+        int samplerate = music.getFrequency();
+
+        Vector<float> originalSamples(numFrames, 0.0f);
+        for (int i = 0; i < numFrames; ++i) {
+            float l = music.samplesL()[i] / 32768.0f;
+            float r = music.samplesR()[i] / 32768.0f;
+            originalSamples[i] = (l + r) * 0.5f;
+        }
+
+        if (filtered && waveformFilter_) {
+            int numFilteredFrames = waveformFilter_->samplesL.size();
+            Vector<float> filteredSamples(numFilteredFrames, 0.0f);
+            for (int i = 0; i < numFilteredFrames; ++i) {
+                float l = waveformFilter_->samplesL[i] / 32768.0f;
+                float r = waveformFilter_->samplesR[i] / 32768.0f;
+                filteredSamples[i] = (l + r) * 0.5f;
+            }
+
+            FindOnsets(filteredSamples.begin(), samplerate, numFilteredFrames,
+                       1, result);
+        } else {
+            FindOnsets(originalSamples.begin(), samplerate, numFrames, 1,
+                       result);
+        }
+
+        RefineOnsets(result, originalSamples.begin(), samplerate, numFrames);
+
+        // Normalize onset strengths
+        if (result.size() > 0) {
+            double maxStrength = 0.0;
+            for (auto& onset : result)
+                maxStrength = max(maxStrength, onset.strength);
+            for (auto& onset : result) onset.strength /= maxStrength;
+        }
+
+        // Clear blocks. Don't have to do this if these onsets aren't rendered
+        if (waveformOverlayOnsets_ && (filtered == bool(waveformFilter_)))
+            clearBlocks();
+
+        return result;
+    }
+
+    const Vector<Onset> getCurrentOnsetsInRange(double startTime,
+                                                double endTime) override {
+        bool filtered = (waveformFilter_ != nullptr);
+        Vector<Onset> onsets(int(endTime - startTime));
+
+        auto& music = gMusic->getSamples();
+        if (!music.isCompleted()) return onsets;
+
+        int samplerate = music.getFrequency();
+
+        // Use the cached onsets if we've got em
+        int type = filtered ? waveformFilter_->type + 1 : 0;
+        double strength = filtered ? waveformFilter_->strength : 0.0;
+        for (auto& cached : waveformOnsets_) {
+            if (cached.type == type && cached.strength == strength) {
+                int startSample = (int)(startTime * samplerate);
+                int endSample = (int)(endTime * samplerate);
+                for (auto& onset : cached.onsets) {
+                    if (onset.pos >= startSample && onset.pos <= endSample)
+                        onsets.push_back(onset);
+                }
+                return onsets;
+            }
+        }
+
+        // Not cached. Do local onset detection for the time range
+        int numFrames = music.getNumFrames();
+        int startSample = clamp((int)(startTime * samplerate), 0, numFrames);
+        int endSample = clamp((int)(endTime * samplerate), 0, numFrames);
+        int localFrames = endSample - startSample;
+        if (localFrames <= 0) return onsets;
+
+        Vector<float> localSamples(localFrames, 0.0f);
+
+        if (filtered) {
+            int filterFrames = waveformFilter_->samplesL.size();
+            int localEnd = min(startSample + localFrames, filterFrames);
+            for (int i = startSample; i < localEnd; ++i) {
+                float l = waveformFilter_->samplesL[i] / 32768.0f;
+                float r = waveformFilter_->samplesR[i] / 32768.0f;
+                localSamples[i - startSample] = (l + r) * 0.5f;
+            }
+        } else {
+            for (int i = startSample; i < endSample; ++i) {
+                float l = music.samplesL()[i] / 32768.0f;
+                float r = music.samplesR()[i] / 32768.0f;
+                localSamples[i - startSample] = (l + r) * 0.5f;
+            }
+        }
+
+        FindOnsets(localSamples.begin(), samplerate, localFrames, 1, onsets);
+        RefineOnsets(onsets, localSamples.begin(), samplerate, localFrames);
+        for (auto& onset : onsets) onset.pos += startSample;
+
+        return onsets;
+    }
+
     void enableFilter(FilterType type, double strength) override {
         delete waveformFilter_;
         waveformFilter_ = new WaveFilter(type, strength);
@@ -302,6 +455,7 @@ struct WaveformImpl : public Waveform {
     void onChanges(int changes) override {
         if (changes & VCM_MUSIC_IS_LOADED) {
             if (waveformFilter_) waveformFilter_->update();
+            waveformOnsets_.clear();
         }
     }
 
@@ -313,6 +467,7 @@ struct WaveformImpl : public Waveform {
                 waveformColorScheme_.bg = {0.0f, 0.0f, 0.0f, 1};
                 waveformColorScheme_.wave = {0.4f, 0.6, 0.4f, 1};
                 waveformColorScheme_.filter = {0.8f, 0.8f, 0.5f, 1};
+                waveformColorScheme_.onset = {0.9f, 0.75f, 0.45f, 1};
                 waveformShape_ = WS_RECTIFIED;
                 waveformLuminance_ = LL_UNIFORM;
                 waveformAntiAliasingMode_ = 1;
@@ -321,6 +476,7 @@ struct WaveformImpl : public Waveform {
                 waveformColorScheme_.bg = {0.45f, 0.6f, 0.11f, 0.8f};
                 waveformColorScheme_.wave = {0.9f, 0.9f, 0.33f, 1};
                 waveformColorScheme_.filter = {0.8f, 0.3f, 0.3f, 1};
+                waveformColorScheme_.onset = {0.93f, 0.7f, 0.53f, 1};
                 waveformShape_ = WS_SIGNED;
                 waveformLuminance_ = LL_UNIFORM;
                 waveformAntiAliasingMode_ = 0;
@@ -571,6 +727,87 @@ struct WaveformImpl : public Waveform {
         }
     }
 
+    void sampleOnsets(WaveEdge* edges, int w, int h, int blockId) {
+        auto& music = gMusic->getSamples();
+
+        // Initialize all edges to zero
+        for (int y = 0; y < h; ++y) {
+            edges[y] = {0, 0, 0};
+        }
+
+        if (!music.isAllocated()) {
+            return;
+        }
+
+        double samplesPerSec = static_cast<double>(music.getFrequency());
+        double samplesPerPixel = samplesPerSec / fabs(gView->getPixPerSec());
+        double samplesPerBlock = static_cast<double>(TEX_H) * samplesPerPixel;
+
+        int64_t blockStartSample = static_cast<int64_t>(
+            samplesPerBlock * static_cast<double>(blockId));
+        int64_t blockEndSample = static_cast<int64_t>(
+            samplesPerBlock * static_cast<double>(blockId + 1));
+
+        int wh = w / 2 - 1;
+
+        for (auto& onset : getOnsets(waveformFilter_ != nullptr)) {
+            if (onset.pos >= blockStartSample && onset.pos < blockEndSample) {
+                double pixelPos =
+                    (onset.pos - blockStartSample) / samplesPerPixel;
+                int y = static_cast<int>(pixelPos * h / TEX_H);
+
+                y = clamp(y, 0, h - 1);
+
+                int ow = static_cast<int>(
+                    wh * clamp(0.1 + 0.9 * onset.strength, 0.1, 1.0));
+                uint8_t lum = 222;
+
+                // Draw onset marker: 2 rows at full width, then fade upward
+                for (int row = 0; row < 2 && y >= 0; ++row)
+                    edges[y--] = {-ow, ow, lum};
+                while (ow > 0 && y >= 0) {
+                    edges[y--] = {-ow, ow, lum};
+                    ow = ow * 5 / 8;
+                    lum = lum * 7 / 8;
+                }
+            }
+        }
+    }
+
+    void renderOnsets(Texture* textures, WaveEdge* edgeBuf, int w, int h,
+                      int blockId) {
+        uint8_t* texBuf = waveformTextureBuffer_.begin();
+
+        // Process onsets
+        sampleOnsets(edgeBuf, w, h, blockId);
+
+        for (int channel = 0; channel < 2; ++channel) {
+            memset(texBuf, 0, w * h);
+
+            // Apply wave shape
+            edgeShapeRectified(texBuf, edgeBuf, w, h);
+
+            // Apply anti-aliasing
+            switch (waveformAntiAliasingMode_) {
+                case 1:
+                    antiAlias2x(texBuf, w, h);
+                    break;
+                case 2:
+                    antiAlias3x(texBuf, w, h);
+                    break;
+                case 3:
+                    antiAlias4x(texBuf, w, h);
+                    break;
+            }
+
+            // Create or update texture
+            if (!textures[channel].handle()) {
+                textures[channel] = Texture(TEX_W, TEX_H, Texture::ALPHA);
+            }
+            textures[channel].modify(0, 0, waveformBlockWidth_, TEX_H, texBuf);
+        }
+    }
+
     void renderBlock(WaveBlock* block) {
         int w = waveformBlockWidth_ * (waveformAntiAliasingMode_ + 1);
         int h = TEX_H * (waveformAntiAliasingMode_ + 1);
@@ -591,6 +828,10 @@ struct WaveformImpl : public Waveform {
             }
         } else {
             renderWaveform(block->tex, edges.begin(), w, h, block->id, false);
+        }
+
+        if (waveformOverlayOnsets_) {
+            renderOnsets(block->tex + 4, edges.begin(), w, h, block->id);
         }
     }
 
@@ -695,6 +936,17 @@ struct WaveformImpl : public Waveform {
                 Draw::fill({xl - pw, y, pw * 2, TEX_H}, filterCol, texL, uvs,
                            Texture::ALPHA);
                 Draw::fill({xr - pw, y, pw * 2, TEX_H}, filterCol, texR, uvs,
+                           Texture::ALPHA);
+            }
+
+            if (waveformOverlayOnsets_) {
+                TextureHandle texL = block->tex[4].handle();
+                TextureHandle texR = block->tex[5].handle();
+
+                uint32_t onsetCol = ToColor32(waveformColorScheme_.onset);
+                Draw::fill({xl - pw, y, pw * 2, TEX_H}, onsetCol, texL, uvs,
+                           Texture::ALPHA);
+                Draw::fill({xr - pw, y, pw * 2, TEX_H}, onsetCol, texR, uvs,
                            Texture::ALPHA);
             }
         }

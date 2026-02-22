@@ -8,7 +8,7 @@ namespace Vortex {
 struct Waveform {
    public:
     struct ColorScheme {
-        colorf bg, wave, filter;
+        colorf bg, wave, filter, onset;
     };
 
     enum Preset { PRESET_VORTEX, PRESET_DDREAM };
@@ -33,6 +33,12 @@ struct Waveform {
     virtual bool getOverlayFilter() = 0;
     virtual void enableFilter(FilterType type, double strength) = 0;
     virtual void disableFilter() = 0;
+
+    virtual void setOverlayOnsets(bool enabled) = 0;
+    virtual bool getOverlayOnsets() = 0;
+    virtual const Vector<struct Onset>& getOnsets(bool filtered) = 0;
+    virtual const Vector<struct Onset> getCurrentOnsetsInRange(
+        double startTime, double endTime) = 0;
 
     virtual void setPreset(Preset preset) = 0;
 

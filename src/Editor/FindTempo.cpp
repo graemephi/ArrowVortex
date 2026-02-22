@@ -593,6 +593,10 @@ void TempoDetectorImp::exec() {
         onsets[i].strength = v;
     }
 
+    for (int i = 100; i < onsets.size(); ++i) {
+        onsets[i].strength = 1.0;
+    }
+
     // Find BPM values.
     CalculateBPM(data, onsets.data(), onsets.size());
     MarkProgress(4, "Find BPM");
