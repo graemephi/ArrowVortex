@@ -26,10 +26,11 @@ struct TempoMan {
 
     /// Indicates which tempo value is being tweaked, when tweak mode is active.
     enum TweakMode {
-        TWEAK_NONE,    ///< Tweak mode is currently not active.
-        TWEAK_OFFSET,  ///< The music offset is being tweaked.
-        TWEAK_BPM,     ///< The BPM at the tweak row is being tweaked.
-        TWEAK_STOP,    ///< The stop at the tweak row is being tweaked.
+        TWEAK_NONE,      ///< Tweak mode is currently not active.
+        TWEAK_OFFSET,    ///< The music offset is being tweaked.
+        TWEAK_BPM,       ///< The BPM at the tweak row is being tweaked.
+        TWEAK_BPM_DRAG,  ///< The BPM at the tweak row is being dragged.
+        TWEAK_STOP,      ///< The stop at the tweak row is being tweaked.
     };
 
     /// Determines how the start and end value in selectRange are interpreted.
@@ -98,6 +99,9 @@ struct TempoMan {
     /// Start tweaking the BPM value at the given row.
     virtual void startTweakingBpm(int row) = 0;
 
+    /// Start tweaking multiple BPMs by dragging.
+    virtual void startDragTweakingBpm() = 0;
+
     /// Start tweaking the stop value at the given row.
     virtual void startTweakingStop(int row) = 0;
 
@@ -115,6 +119,9 @@ struct TempoMan {
 
     /// Returns the current tweak row.
     virtual int getTweakRow() const = 0;
+
+    /// Applies a segment edit to the tweak state.
+    virtual void setTweakEdit(const SegmentEdit& edit, double offset) = 0;
 
     /// Returns the number of seconds the music is delayed, relative to the
     /// first beat.

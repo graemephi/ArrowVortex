@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <math.h>
 
+#include <System/Debug.h>
+
 #include <Core/ByteStream.h>
 #include <Core/StringUtils.h>
 #include <Core/Utils.h>
@@ -571,6 +573,13 @@ struct TempoManImpl : public TempoMan {
         myTweakValue = getBpm(row);
     }
 
+    void startDragTweakingBpm() override {
+        stopTweaking(false);
+        myTweakTempo = new Tempo;
+        myTweakTempo->copy(myTempo);
+        myTweakMode = TWEAK_BPM_DRAG;
+    }
+
     void startTweakingStop(int row) override {
         if ((myTweakMode == TWEAK_STOP && myTweakRow == row) || !myTempo)
             return;
@@ -593,6 +602,19 @@ struct TempoManImpl : public TempoMan {
             myTweakTempo->segments->insert(Stop(myTweakRow, value));
         }
 
+        myUpdateTimingData();
+        gEditor->reportChanges(VCM_TEMPO_CHANGED);
+    }
+
+    void setTweakEdit(const SegmentEdit& edit, double offset) override {
+        VortexAssert(myTweakMode == TWEAK_BPM_DRAG);
+        if (myTweakTempo) {
+            myTweakTempo->segments->clear();
+            myTweakTempo->segments->insert(*myTempo->segments);
+            myTweakTempo->segments->remove(edit.rem);
+            myTweakTempo->segments->insert(edit.add);
+            myTweakTempo->offset = offset;
+        }
         myUpdateTimingData();
         gEditor->reportChanges(VCM_TEMPO_CHANGED);
     }

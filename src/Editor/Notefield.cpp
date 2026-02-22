@@ -843,35 +843,56 @@ void TweakInfoBox::draw(recti r) {
     int mode = gTempo->getTweakMode();
     r.x += r.w / 2;
 
-    const char* name[] = {"none", "offset", "BPM", "stop"};
-    Str::fmt str("Tweak %1 :: %2");
-    str.arg(name[mode]).arg(gTempo->getTweakValue(), 3, 3);
+    if (gTempoBoxes->isDragging()) {
+        static const char* keys[] = {
+            "ctrl", "shift", "alt", "delete / d", "escape / RMB", "release",
+        };
+        static const char* desc[] = {
+            "snap", "ripple", "warp", "remove", "cancel", "apply",
+        };
+        static_assert(std::size(keys) == std::size(desc));
 
-    Text::arrange(Text::MC, str);
-    Text::draw(vec2i{r.x, r.y + 16});
+        TextStyle textStyle;
+        for (int i = 0; i < std::size(keys); ++i) {
+            textStyle.textColor = RGBAtoColor32(255, 255, 255, 128);
+            Text::arrange(Text::TR, textStyle, keys[i]);
+            Text::draw(vec2i{r.x - 8, r.y + 6 + i * 14});
 
-    const char* keys[] = {
-        "scrollwheel + shift",
-        "scrollwheel + alt",
-        "escape / RMB",
-        "return / LMB",
-    };
-    const char* desc[] = {
-        "adjust (coarse)",
-        "adjust (precise)",
-        "cancel adjustment",
-        "apply adjustment",
-    };
+            textStyle.textColor = Colors::white;
+            Text::arrange(Text::TL, textStyle, desc[i]);
+            Text::draw(vec2i{r.x + 8, r.y + 6 + i * 14});
+        }
+    } else {
+        const char* name[] = {"none", "offset", "BPM", "stop"};
+        Str::fmt str("Tweak %1 :: %2");
+        str.arg(name[mode]).arg(gTempo->getTweakValue(), 3, 3);
 
-    TextStyle textStyle;
-    for (int i = 0; i < 4; ++i) {
-        textStyle.textColor = RGBAtoColor32(255, 255, 255, 128);
-        Text::arrange(Text::TR, textStyle, keys[i]);
-        Text::draw(vec2i{r.x - 8, r.y + 32 + i * 14});
+        Text::arrange(Text::MC, str);
+        Text::draw(vec2i{r.x, r.y + 16});
 
-        textStyle.textColor = Colors::white;
-        Text::arrange(Text::TL, textStyle, desc[i]);
-        Text::draw(vec2i{r.x + 8, r.y + 32 + i * 14});
+        const char* keys[] = {
+            "scrollwheel + shift",
+            "scrollwheel + alt",
+            "escape / RMB",
+            "return / LMB",
+        };
+        const char* desc[] = {
+            "adjust (coarse)",
+            "adjust (precise)",
+            "cancel adjustment",
+            "apply adjustment",
+        };
+
+        TextStyle textStyle;
+        for (int i = 0; i < 4; ++i) {
+            textStyle.textColor = RGBAtoColor32(255, 255, 255, 128);
+            Text::arrange(Text::TR, textStyle, keys[i]);
+            Text::draw(vec2i{r.x - 8, r.y + 32 + i * 14});
+
+            textStyle.textColor = Colors::white;
+            Text::arrange(Text::TL, textStyle, desc[i]);
+            Text::draw(vec2i{r.x + 8, r.y + 32 + i * 14});
+        }
     }
 }
 

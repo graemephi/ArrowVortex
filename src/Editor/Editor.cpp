@@ -857,6 +857,7 @@ struct EditorImpl : public Editor, public InputHandler {
         gTextOverlay->tick();
         gHistory->handleInputs(events);
         gMinimap->handleInputs(events);
+        gTempoBoxes->handleInputs(events);
         gEditing->handleInputs(events);
 
         if (gSimfile->isOpen()) {
