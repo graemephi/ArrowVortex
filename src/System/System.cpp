@@ -441,6 +441,8 @@ struct SystemImpl : public System {
             glOrtho(0, mySize.x, mySize.y, 0, -1, 1);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+            Cursor::Icon lastFrameCursor = myCursor;
+
             // Reset the mouse cursor.
             myCursor = Cursor::ARROW;
 
@@ -451,6 +453,10 @@ struct SystemImpl : public System {
 #endif
 
             gEditor->tick();
+
+            bool isHidden = (myCursor == Cursor::HIDDEN);
+            bool wasHidden = (lastFrameCursor == Cursor::HIDDEN);
+            if (isHidden != wasHidden) ShowCursor(myCursor != Cursor::HIDDEN);
 
             // Display.
             SwapBuffers(myHDC);

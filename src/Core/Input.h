@@ -32,7 +32,8 @@ enum Icon {
     SIZE_NESW,  ///< Arrows pointing northeast/southwest.
     SIZE_NWSE,  ///< Arrows pointing northwest/southeast.
 
-    NUM_CURSORS  ///< Total number of cursor icons.
+    NUM_CURSORS,  ///< Total number of cursor icons.
+    HIDDEN        ///< No icon.
 
 };
 };  // namespace Cursor
