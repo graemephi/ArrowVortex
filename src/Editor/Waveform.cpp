@@ -20,9 +20,30 @@
 #include <Managers/TempoMan.h>
 #include <Editor/Menubar.h>
 #include <Editor/TextOverlay.h>
+#include <Editor/TransientFilter.h>
 #include <Iir.h>
 
 namespace Vortex {
+
+static void iirLowPass(const short* src, short* dst, int numFrames,
+                       double samplerate, double cutoffHz) {
+    Iir::Butterworth::LowPass<3> filter;
+    filter.setup(samplerate, cutoffHz);
+    for (int i = 0; i < numFrames; ++i) {
+        double sample = filter.filter(double(src[i]));
+        dst[i] = short(clamp(sample, double(SHRT_MIN), double(SHRT_MAX)));
+    }
+}
+
+static void iirHighPass(const short* src, short* dst, int numFrames,
+                        double samplerate, double cutoffHz) {
+    Iir::Butterworth::HighPass<3> filter;
+    filter.setup(samplerate, cutoffHz);
+    for (int i = 0; i < numFrames; ++i) {
+        double sample = filter.filter(double(src[i]));
+        dst[i] = short(clamp(sample, double(SHRT_MIN), double(SHRT_MAX)));
+    }
+}
 
 static const int TEX_W = 256;
 static const int TEX_H = 128;
@@ -45,25 +66,61 @@ struct WaveFilter {
 
     static void lowPassFilter(const short* src, short* dst, int numFrames,
                               double samplerate, double strength) {
-        const int order = 3;
-        Iir::Butterworth::LowPass<order> filter;
         double cutoff = std::min(
             20050.0, std::max(50.0, 2 * pow(10, 4 * (1 - strength)) + 49));
-        filter.setup(samplerate, cutoff);
-        for (auto i = 0; i < numFrames; ++i) {
-            dst[i] = filter.filter(src[i]);
-        }
+        iirLowPass(src, dst, numFrames, samplerate, cutoff);
     }
 
     static void highPassFilter(const short* src, short* dst, int numFrames,
                                double samplerate, double strength) {
-        const int order = 3;
-        Iir::Butterworth::HighPass<order> filter;
+        double cutoff =
+            std::min(20000.0, std::max(0.5, 2 * pow(10, 4 * cbrt(strength))));
+        iirHighPass(src, dst, numFrames, samplerate, cutoff);
+    }
+
+    static void transientsGuidedFilter(const short* src, short* dst,
+                                       int numFrames, double samplerate,
+                                       double strength) {
+        Vector<short> bass(numFrames, 0);
+        Vector<short> high(numFrames, 0);
+        Vector<short> scooped(numFrames, 0);
+
+        // Do something shelf-filter like to filter the signal before looking
+        // for transients
+        iirLowPass(src, bass.begin(), numFrames, samplerate, 200.0);
+        iirHighPass(bass.begin(), bass.begin(), numFrames, samplerate, 60.0);
+        iirHighPass(src, high.begin(), numFrames, samplerate, 8000.0);
+
+        for (int i = 0; i < numFrames; ++i) {
+            double b = double(bass[i]);
+            double h = double(high[i]);
+            scooped[i] =
+                short(clamp(0.5 * (b + h), double(SHRT_MIN), double(SHRT_MAX)));
+        }
+
+        TransientsGuidedFilter(src, dst, scooped.begin(), numFrames, samplerate,
+                               1.0 - strength);
+    }
+
+    static void shelfFilter(const short* src, short* dst, int numFrames,
+                            double samplerate, double strength) {
+        // Cuts out mid and extreme lows
+        Vector<short> highpassed(numFrames, 0);
+        Vector<short> lowpassed(numFrames, 0);
+
         double cutoff =
             std::min(20000.0, std::max(0.5, 2 * pow(10, 4 * strength)));
-        filter.setup(samplerate, cutoff);
-        for (auto i = 0; i < numFrames; ++i) {
-            dst[i] = filter.filter(src[i]);
+        iirHighPass(src, highpassed.begin(), numFrames, samplerate, cutoff);
+
+        // Use strength to mix back in a bandpass over 60-200Hz
+        iirLowPass(src, lowpassed.begin(), numFrames, samplerate, 200.0);
+        iirHighPass(lowpassed.begin(), lowpassed.begin(), numFrames, samplerate,
+                    60.0);
+
+        for (int i = 0; i < numFrames; ++i) {
+            double hp = double(highpassed[i]) * 0.75;
+            double lp = double(lowpassed[i]) * strength * 0.25;
+            dst[i] = short(clamp(hp + lp, double(SHRT_MIN), double(SHRT_MAX)));
         }
     }
 
@@ -76,6 +133,10 @@ struct WaveFilter {
         auto filter = highPassFilter;
         if (type == Waveform::FT_LOW_PASS) {
             filter = lowPassFilter;
+        } else if (type == Waveform::FT_TRANSIENTS) {
+            filter = transientsGuidedFilter;
+        } else if (type == Waveform::FT_SHELF) {
+            filter = shelfFilter;
         }
 
         samplesL.release();

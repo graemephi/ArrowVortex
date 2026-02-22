@@ -21,6 +21,7 @@ list(APPEND INC
 	"StreamGenerator.h"
 	"TempoBoxes.h"
 	"TextOverlay.h"
+	"TransientFilter.h"
 	"View.h"
 	"Waveform.h"
 )
@@ -51,6 +52,7 @@ list(APPEND SRC
 	"StreamGenerator.cpp"
 	"TempoBoxes.cpp"
 	"TextOverlay.cpp"
+	"TransientFilter.cpp"
 	"View.cpp"
 	"Waveform.cpp"
 )

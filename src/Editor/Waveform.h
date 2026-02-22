@@ -14,7 +14,7 @@ struct Waveform {
     enum Preset { PRESET_VORTEX, PRESET_DDREAM };
     enum WaveShape { WS_RECTIFIED, WS_SIGNED };
     enum Luminance { LL_UNIFORM, LL_AMPLITUDE };
-    enum FilterType { FT_HIGH_PASS, FT_LOW_PASS };
+    enum FilterType { FT_HIGH_PASS, FT_LOW_PASS, FT_SHELF, FT_TRANSIENTS };
 
     static void create(XmrNode& settings);
     static void destroy();

@@ -94,6 +94,8 @@ DialogWaveformSettings::DialogWaveformSettings() {
     filter->value.bind(&filterType_);
     filter->addItem("High-pass");
     filter->addItem("Low-pass");
+    filter->addItem("Shelf");
+    filter->addItem("Transients");
     filter->setTooltip("Determines the shape of the waveform filter");
 
     // Filter strength.
