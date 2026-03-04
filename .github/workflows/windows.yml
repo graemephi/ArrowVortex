@@ -53,10 +53,8 @@ jobs:
       - name: Build AV
         run: cmake --build build --config Release --parallel "$env:NUMBER_OF_PROCESSORS"
       - name: Collect into a directory
-        if: github.ref_name == 'beta'
         run: cmake --install build --config Release --prefix ./
       - name: Upload artifact
-        if: github.ref_name == 'beta'
         uses: actions/upload-artifact@v5
         with:
           name: ArrowVortex-${{ github.sha }}
