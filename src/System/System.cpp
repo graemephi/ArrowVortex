@@ -713,10 +713,10 @@ struct SystemImpl : public System {
             }
             case WM_RBUTTONDOWN:
                 ++mc;
-                break;
+                [[fallthrough]];
             case WM_MBUTTONDOWN:
                 ++mc;
-                break;
+                [[fallthrough]];
             case WM_LBUTTONDOWN:
                 ++mc;
                 {
@@ -731,10 +731,10 @@ struct SystemImpl : public System {
                 }
             case WM_RBUTTONDBLCLK:
                 ++mc;
-                break;
+                [[fallthrough]];
             case WM_MBUTTONDBLCLK:
                 ++mc;
-                break;
+                [[fallthrough]];
             case WM_LBUTTONDBLCLK:
                 ++mc;
                 {
@@ -749,10 +749,10 @@ struct SystemImpl : public System {
                 }
             case WM_RBUTTONUP:
                 ++mc;
-                break;
+                [[fallthrough]];
             case WM_MBUTTONUP:
                 ++mc;
-                break;
+                [[fallthrough]];
             case WM_LBUTTONUP:
                 ++mc;
                 {
