@@ -731,9 +731,12 @@ struct TempoBoxesImpl : public TempoBoxes {
             if (myMouseOverBox == -1 && canDrag && hoveringX) {
                 bool alt = gSystem->getKeyFlags() & Keyflag::ALT;
                 int row = gView->offsetToRow(mouseOffset);
+                int quantization = gView->getSnapType() > ST_4TH
+                                       ? 192 / gView->getSnapQuant()
+                                       : ROWS_PER_BEAT;
                 int snapRow = alt ? row
-                                  : ((row + ROWS_PER_BEAT / 2) / ROWS_PER_BEAT *
-                                     ROWS_PER_BEAT);
+                                  : ((row + quantization / 2) / quantization *
+                                     quantization);
                 int snapY = gView->rowToY(snapRow);
                 bool hoveringY = abs(snapY - mpos.y) < 12;
                 BpmChange existing =
