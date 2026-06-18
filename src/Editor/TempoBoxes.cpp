@@ -22,7 +22,6 @@
 #include <Editor/History.h>
 #include <Editor/Menubar.h>
 #include <Editor/Music.h>
-#include <Editor/Notefield.h>
 #include <Editor/Selection.h>
 #include <Editor/View.h>
 #include <Editor/Waveform.h>
@@ -732,8 +731,7 @@ struct TempoBoxesImpl : public TempoBoxes {
             if (myMouseOverBox == -1 && canDrag && hoveringX) {
                 bool alt = gSystem->getKeyFlags() & Keyflag::ALT;
                 int row = gView->offsetToRow(mouseOffset);
-                int quantization = gNotefield->hasShowBeatLinesSnap() &&
-                                           gView->getSnapType() > ST_4TH
+                int quantization = gView->getSnapType() > ST_4TH
                                        ? 192 / gView->getSnapQuant()
                                        : ROWS_PER_BEAT;
                 int snapRow = alt ? row
